@@ -17,7 +17,7 @@ In this session we will cover:
 * `cellranger`: additional resources and information for using cellranger
 
 ## How to download the repo
-1.To go this GitHub Repo: https://github.com/mattmadgwick/10XGenomicsDataAnalysis
+1. To go this GitHub Repo: https://github.com/mattmadgwick/10XGenomicsDataAnalysis
 2. Go over to the green code button on the right-hand side and then go to Download ZIP .
 3. This should start the download of the data.
 4. Once it has downloaded you will need to uncompress the folder and then you will have all the materials you need for the Hands on: 10X Genomics data analysis (Seurat) later today.
