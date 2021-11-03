@@ -1,0 +1,537 @@
+---
+title: "Hands on: 10X Genomics data analysis (Seurat)"
+date: 03-11-2021
+output: html_document
+html_document: default
+pdf_document: default
+---
+
+# Hands on: 10X Genomics data analysis (Seurat)
+
+This workbook will take you through step-by-step how to conduct the downstream analysis of your single-cell data in Seurat. 
+
+After you have done the tutorial, you can use this same workbook as a template for any future analyses that you run. However, one should bear in mind that you will need to ensure that you account for subtle differences in the data. See "Loading data into Seurat: Things to consider" in the provided presentation for more information.
+
+* **Tip**: If you are using windows, you might need change `/` to `\`. Please try and run the code first. If you have any issues then please adpat the code.
+
+## Seurat step-by-step
+
+## Step 0: Loading your packages
+
+To use the software packages we need in R, first you will have to load the packages. The `library()` function calls the package you want a loads it into the environment.
+
+```{r Loading packages necessary for tutorial, warning = FALSE, message = FALSE}
+#Loading packages necessary for tutorial
+library(Seurat)
+library(ggplot2)
+library(cowplot)
+library(dplyr)
+```
+
+## Step 1: Reading in the data 
+
+This involves slightly different steps depending on the scRNA-seq technology and pre-processing steps taken to get your counts per gene matrix. Here you will go through two examples:
+
+### 10X dataset (Droplet-based)
+
+```{r}
+data_10x <- Read10X(data.dir = "data/10X/filtered_gene_bc_matrices/")
+```
+
+* **Tip**: If you cannot read in the data as R cannot find the file path above. You will need use `setwd()` to set the working directory to the folder you downloaded. For example this might be like: `setwd("/Users/name/Downloads/EI-Single-Cell-Course")`
+
+The Read10X() function reads in the output of the Cellranger pipeline from 10X, returning a unique molecular identified (UMI) count matrix. The values in this matrix represent the number of molecules for each feature (i.e. gene; row) that are detected in each cell (column).
+
+### Smartseq2 dataset (plate-based)
+
+If however, you wanted to use a plate-based method you may find that the data is in a matrix format. In this case, the row names should be the gene names and the columns the cell ID. 
+
+**NB:** __the following code has been commented out by placing a hashtag (#) before of it. This means that when you try and run this block it will not run. We wanted to give you an example of how to load in plate-based data (like that you generated in your previous tutorials) however, for this session we will continue looking at the reference 10X dataset.__
+
+```{r} 
+# ss2_matrix <- read.table(file = 'data/ss2/ss2_raw_matrix.tsv', header = T, row.names = "external_gene_name")
+# seurat_object <- CreateSeuratObject(counts = ss2_matrix, project = "scRNAseq_2021")
+```
+
+* **Tip**: For the SS2 data example. On your Environment (Top right side of your screen) you should see a file appear saying 44883 observations of 1920 variables. In our case, variables = single cells, and 44883 = number of genes in our dataset. This means you have loaded in the dataset correctly! *
+
+
+## Step 2: Creating a Seurat object 
+
+The Seurat object serves as a container that contains both your data (the matrix) and analysis you will perform for your single-cell dataset. You can assign this whatever name you'd like, making sure it contains *no spaces*. To do this, we provide our matrix/loaded 10X data in `counts` parameter, and give the project a title in the `project` parameter. 
+
+```{r} 
+seurat_object <- CreateSeuratObject(counts = data_10x, project = "scRNAseq_2021")
+```
+
+You may see the following warming message: `Show in New WindowClear OutputExpand/Collapse Output Feature names cannot have underscores ('_'), replacing with dashes ('-')`. If you do then do not panic or worry. This is just Seurat helping you out and cleaning you data for you! 
+
+If this has worked, when running seurat_object you should see this message pop up along with some more information. 
+
+```{r}
+seurat_object
+```
+
+* **Tip**: For the 10X data example. On your Environment (Top right side of your screen) you should see an object appear saying 32738 features of 2700 samples. This means you have loaded in the dataset correctly!
+
+
+### Step 3: Quality control (QC)
+
+Seurat allows you to easily explore QC metrics and filter cells. We will use the following criteria: 
+
+(1) The number of unique genes detected in each cell. Low-quality cells or empty droplets will often have very few genes. Cell doublets or multiplets may exhibit an aberrantly high gene count
+
+(2) The total number of molecules detected within a cell (correlates strongly with unique genes)
+
+(3) The percentage of reads that map to the mitochondrial genome. Low-quality / dying cells often exhibit extensive mitochondrial contamination
+
+* **Tip**: The `PercentageFeatureSet()` function is used to calculate what percentage of counts originates from a set of mitochondrial features (features and genes are used interchangibly). We need to add this metric into the meta data of our object before doing anything else
+
+```{r}
+seurat_object[["percent.mt"]] <- PercentageFeatureSet(seurat_object, pattern = "^MT-")
+```
+
+* **Tip**: The 10X example data here is Human, so the mitochondrial genes are labeled use capital MT. However, other species may use a lowercase mt.  
+
+Now that you have calculated the percentage mitochondrial you can see that this has been added to your `seurat_object`. You can view this data in the `meta.data` table. 
+
+**Question:** Try showing the meta-data of the top 10 cells of our Seurat object. Hint, change the parameter of `n`.
+```{r}
+head(seurat_object@meta.data, n=5)
+```
+
+**Tip**: Remember we can use the function head() to see the first few rows of our dataset, and to select the meta data 'slot' of our seurat object we use `seurat_object@meta.data$percent.mt` which will alone return the values for percent.mt.
+
+#### To visualise these metrics we will use Violin plots. 
+
+Here you will generate your first plot of the project! This will tell you some initial information about the dataset. This is very similar to what you have done before on Galaxy, but just using the Seurat package. To do this, we will generate a violin plot using the `VlnPlot()` function. This plotting function is very versatile as you later on in the workbook.
+
+To do this we use: 
+```{r}
+VlnPlot(seurat_object, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+**Question**: What do you immediately notice about your dataset? What do you think this means about your dataset?
+
+`FeatureScatter` is typically used to visualize feature-feature relationships, but can be used for anything calculated by the object, i.e. columns in object metadata, PC scores etc. This plotting function can also be very useful if you wanted to compare meta-data or particular cell populations later on in your analysis. See the previous selection to see how to access your meta data.
+
+First you can plot the number of counts against the calculated percentage of mitochondrial:
+
+```{r}
+n_counts_vs_percent_mito_plot <- FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "percent.mt")
+n_counts_vs_percent_mito_plot
+```
+
+You can also plot the number of counts against the number of features (genes):
+```{r}
+n_counts_vs_n_features_plot <- FeatureScatter(seurat_object, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+n_counts_vs_n_features_plot
+```
+
+Now we can combine these scatter plots together for easy of plotting. Note you can use the `+` operator to combine two plot objects. 
+
+```{r}
+n_counts_vs_percent_mito_plot + n_counts_vs_n_features_plot
+```
+*Question:* What is the relationship between the number of counts and the number of features(genes) in the cells? 
+
+Here are a couple of other commands that come in handy to get information about your dataset: 
+
+```{r}
+# To get the average overall counts per cell:
+mean(seurat_object@meta.data$nCount_RNA)
+```
+
+```{r}
+# To get the average number of genes:
+mean(seurat_object@meta.data$nFeature_RNA)
+```
+
+
+### Step 4: Data subsetting 
+
+#### Determining Cutoffs
+Choosing a cutoff or selection criteria is usually very specific to your analysis and the biological question you are asking. However, the plots generated above (the two feature scatter plots, and your violin plots) you can see where the majority of our data points are. Use these to choose your cut-off values for features, counts, and percent mitochondrial.
+
+Remembering that: 
+
+(1) Low-quality cells or empty droplets will often have very few genes
+
+(2) Cell doublets or multiplets may exhibit an aberrantly high gene count
+
+(3) Low-quality / dying cells often exhibit extensive mitochondrial contamination
+
+'Subset' allows you to achieve this in one command using operators *(see the slides for more information)*. From the above we have selected the following values:
+
+* **Tip**: Try changing the values for each parameter (i.e. `nFeature_RNA`) on your console and see what effect it has on the number of cells removed. Once you are happy with your chosen cut offs, you then assign them to your object.
+
+```{r}
+seurat_object <- subset(seurat_object, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+seurat_object
+```
+As you can see, compared to the original sample size of 2700 cells using this subsetting criteria you have managed to remove cells.
+
+**Question**: How many cells did you subset out of your dataset? 
+
+
+### Step 5: Normalisation 
+
+After removing unwanted cells from the dataset, the next step is to normalize the data. By default, Seurat employs a global-scaling normalization method “LogNormalize” that normalizes the feature expression measurements for each cell by the total expression, multiplies this by a scale factor, and log-transforms the result. The scale factor by default is set to 10,000. 
+
+**In this case, you can just copy the below line and it will do this all for you!**
+
+```{r}
+seurat_object <- NormalizeData(seurat_object, normalization.method = "LogNormalize", scale.factor = 10000)
+```
+
+* **Tip**: On your console if you type ? followed by any function, information about the function will appear on the 'Help' tab to your right. The `?` feature is a really useful tool that R gives you to find out what inputs a function requires.
+
+**Question**: Using `?NormalizeData` on the console, can you find out what some other default parameters are. 
+
+### Step 6: Identification of highly variable features (feature selection)
+
+You next need to calculate a subset of features that exhibit high cell-to-cell variation in the dataset (i.e, they are highly expressed in some cells, and lowly expressed in other cells). You will normally find that focusing on these genes in downstream analysis helps to highlight biological signal in single-cell datasets.
+
+We can do this by implementing the `FindVariableFeatures()` function. Use the below function to find the top 2000 variable features in the dataset. 
+
+```{r}
+seurat_object <- FindVariableFeatures(seurat_object, selection.method = "vst", nfeatures = 2000)
+```
+
+* **Tip**: if you are using a plate-based method where you have more genes, you might want to consider increasing the number of varibale genes you use for your analysis.
+
+Using head(), you can show the top 10 variable features in your dataset, and assign this to a variable called top10. You can change the value of `n` to show however many features you would like to inspect.
+
+```{r}
+top10 <- head(VariableFeatures(seurat_object), n=10)
+top10
+```
+
+You can now plot the highly variable genes by plotting the average expression against the standised variance. The top 2000 most variable genes will be highlighted in Red while the rest will be black. The number of genes in each category is displayed next to the label on the legend.
+
+```{r}
+var_feat_plot <- VariableFeaturePlot(seurat_object)
+var_feat_plot
+```
+
+To go one step further, you can label the top 10 genes you already pulled out of the dataset. By adding data labels you can easily see these genes. Seurat has a helpher function to produce this plot called `LabelPoints` which we can use alongside the top 10 genes list to label them on the plot.**
+
+```{r}
+var_feat_plot_labeled <- LabelPoints(plot = var_feat_plot, points = top10, repel = TRUE)
+var_feat_plot_labeled
+```
+
+### Step 7: Scaling 
+
+Next, you apply a linear transformation (‘scaling’) that is a standard pre-processing step prior to dimensional reduction techniques like PCA. The `ScaleData()` function:
+
+- Shifts the expression of each gene, so that the mean expression across cells is 0
+- Scales the expression of each gene, so that the variance across cells is 1
+
+This step gives equal weight in downstream analyses, so that the most highly-expressed genes do not dominate the rest of the analysis.
+
+* **Tip**: the results of this are stored in seurat_object[["RNA"]]@scale.data*
+
+(This might take a little while, don't panic!)
+
+```{r}
+all_genes <- rownames(seurat_object)
+seurat_object <- ScaleData(seurat_object, features = all_genes)
+```
+
+
+### Step 8: PCA 
+
+Next you perform PCA on the scaled data. By default, only the previously determined highly variable features are used as input (here we are going forward with only the top 2000 most variable genes).
+
+Run PCA on your Seurat object using the below command. This might print out a large log of gene names - don't worry, that means it has worked!
+
+```{r}
+seurat_object <- RunPCA(seurat_object, features = VariableFeatures(object = seurat_object))
+```
+
+Now if you inspect your Seurat object again you can see that you have `1 dimensional reduction calculated:`. This means that you have added the results from your PCA reduction to the Seurat object.
+
+```{r message = FALSE}
+seurat_object
+```
+
+**Question:** Can you show the top 5 features for the first 3 principal components?
+
+You can see the first n features in x: y of your PCA using. i.e. `seurat_object[["pca"]], dims = x:y, nfeatures = n)`. This command will show the top n features that are both positively and negatives contributing to the reduction.
+
+```{r message = FALSE}
+print(seurat_object[["pca"]], dims = 1:15, nfeatures = 10)
+```
+
+Feel free to play around with different PCs this might come in handy later on in your analysis!
+
+#### Explore and visualise the PCA results a few different ways
+
+Seurat provides several useful ways of visualizing both cells and features that define the PCA, including `VizDimReduction()`, `DimPlot()`, and `DimHeatmap()`
+
+##### Using VizDimLoadings()
+You can visualise the top genes associated with each principle reduction components e.g. for the first 2 components using `VizDimReduction()`.
+
+```{r}
+VizDimLoadings(seurat_object, dims = 1:2)
+```
+
+Or alternatively by added some additional paramters you can view the first 6 components and their top 10 genes. The larger the loading (i.e. the more positive) the greater the variance and therefore the effect that gene has on that component.
+
+```{r} 
+VizDimLoadings(seurat_object, dims = 1:6, reduction = "pca", ncol = 3, nfeature=10)
+```
+
+**Question:** Which PCs show the most interesting loadings?
+
+
+##### Using DimPlot()
+
+Another way to visualise the dimensional reduction produced by the PCA is to plot the components on a 2D scatter plot where each point is a cell and it's positioned based on the cell embeddings determined by the reduction technique. By default, cells are colored by their identity class (can be changed with the `group.by` parameter if you have the relavent data in the your `meta.data`).
+
+Here is an example for the first 2 components:
+
+```{r}
+DimPlot(seurat_object, reduction = "pca", dims = 1:2)
+```
+
+##### Using DimHeatmap()
+
+Draws a heatmap focusing on a principal component. Both cells and genes are sorted by their principal component scores. Allows for nice visualization of sources of heterogeneity in the dataset.
+
+e.g. for PC 1, and how to show multiple heatmaps on the same plot.
+
+**Question:** Trying investigation different dimensions by change the number after the `dim =` parameter
+
+```{r}
+DimHeatmap(seurat_object, dims = 1, cells = 500, balanced = TRUE)
+```
+
+You can also plot multiple componets heatmaps in one plot.
+```{r}
+DimHeatmap(seurat_object, dims = 1:6, cells = 500, balanced = TRUE, ncol = 3)
+```
+
+To overcome the extensive technical noise in any single feature for scRNA-seq data, Seurat clusters cells based on their PCA scores, with each PC essentially representing a ‘metafeature’ that combines information across a correlated feature set. The top principal components therefore represent a robust compression of the dataset. However, how many components should you choose to include? 10? 20? 100?
+
+To help determine this you can use an 'Elbow Plot', a method of ranking of principle components based on the percentage of variance explained by each PC. To generate the plot you can use the function: `ElbowPlot()`
+
+```{r message=FALSE}
+ElbowPlot(seurat_object)
+```
+
+**Question:** In your plot you should observe an 'elbow' where the curve plateaues, a PC from which there is little change in standard deviation and so including them wouldn't reveal much more about the dataset. From the results of your elbow plot, how many PCs are you going to use for your clustering and why?
+
+### Step 9: Clustering
+
+Seurat applies a graph-based clustering approach, a method whereby cells are embedded in a graph structure with edges drawn between cells with similar feature expression patterns, and then attempts to partition this graph into highly interconnected ‘communities’. To cluster the cells (grouping cells together) we use the `FindClusters()` function.
+
+
+#### (1) Find Neighbours
+
+First you construct a WNN (weighted nearest neighbours) graph based on the distance in PCA space, and refine the edge 'weights' between any two cells based on the shared overlap in their local neighborhoods. This step is performed using the `FindNeighbors()` function, and takes as input the previously defined dimensionality of the dataset (e.g. first 10 PCs).
+
+**This is where your principal component analysis is important!**
+
+**To do:** Using your results from the PCA section set the number of dimensions for the `FindNeighbours()` function to use:
+
+```{r message=FALSE}
+seurat_object <- FindNeighbors(seurat_object, dims = 1:10)
+```
+
+#### (2) Find Clusters
+
+This function contains a parameter called resolution which sets the ‘granularity’ of the clustering.
+
+* **Tip**: For the purposes of this project and dataset, I'd recommend using a resolution between 0.5-1. Feel free to play after with this parameter.*
+
+```{r message=FALSE}
+seurat_object <- FindClusters(seurat_object, resolution = 0.5)
+```
+
+**To do:** Look at cluster IDs of the first 5 cells eg. `head(Idents(object), x)`
+
+Running this command will display the first 10 cells in your data with their newly assigned clusters (currently represented as numbers) that the louvain algorithm has decided the cell belongs too. Across the top will be the cell (either the barcode or the read name) and below it will be the cluster it is assinged to. At the very bottom you will see `Levels:...` this shows an overview of all the clusters found in the dataset.
+
+```{r message=FALSE}
+head(Idents(seurat_object), 10)
+```
+
+**Question:** Try running `FindClusters()` at different resolutions by changing the value of `resolution`, how does changing the resolution affect the function?
+
+#### (3) Run non-linear dimensional reduction (UMAP)
+
+Seurat offers several non-linear dimensional reduction techniques, such as tSNE or in our case **UMAP**, to visualize and explore these datasets. The goal of these algorithms is to learn the underlying 'manifold' of the data in order to place similar cells together in low-dimensional space. Cells within the graph-based clusters determined above should co-localize on these dimension reduction plots.
+
+* **Tip**: As input to the UMAP use the same number of PCs as input to the clustering analysis i.e. during FindNeighbors()*
+
+```{r message=FALSE, warning=FALSE}
+seurat_object <- RunUMAP(seurat_object, 1:10)
+```
+
+You can visualize this with DimPlot the same as PCA, but now you define the reduction to plot like this: 
+
+```{r}
+DimPlot(seurat_object, reduction = "umap")
+```
+
+**To do:** Now that you can visualize your UMAP clusters, go back to where you ran `FindNeighbours()` and have a go again with a lower or higher resolution (keeping dims the same). You should see how the resolution affects the function more clearly.
+
+**Question**: This is really important. What do you think would be impact to the conclusions you may draw from your experiment of using a resolution that is too low?
+
+* **Tip**: If you want to explore different ways of showing this data, remember to use `?DimPlot` to see which things you can modify. E.g. you can change the colour scheme, the point size, the factor to colour the points by etc!*
+
+Here is the same UMAP coloured instead by the cell phenotypes. In this case we only have one item in the `meta.data` which we can plot. So we just display what project the data is from.
+```{r}
+DimPlot(seurat_object, reduction = "umap", group.by = "orig.ident")
+```
+
+At this point in the analysis, particularly with larger datasets you might want to save you data. Just incase your computer crashes or if you forget to save your progress! An amazing feature in R, is that you can always save your Seurat Object. This is really useful for collaboration and sharing the data as well. To do this you can use the following command: `saveRDS(seurat_object, file = 'seurat_object.rds')`
+
+### Step 10: Finding marker genes and differential expression
+Seurat can help you find markers (cluster/cell markers) that define clusters via differential expression. By default, it identifies positive and negative markers of a single cluster (specified in ident.1), compared to all other cells. `FindAllMarkers()` automates this process for all clusters, but you can also test groups of clusters vs. each other, or against all cells.
+
+To find markers for every cluster compared to all remaining cells, and report only the positive ones you can use the below command. 
+*Note: This takes a little while to calculate, and will vary depending on the number of clusters you have.*
+
+```{r message=FALSE}
+seurat_markers <- FindAllMarkers(seurat_object, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+```
+
+Next we can extract the highest genes per cluster by their average log fold change (`avg_log2FC` in the data frame). You don't need to pay too much attention on the numbers themselves for the purposes of our project, but ultimately the p value describes how significantly different the expression of that gene is in the cluster compared to the other clusters (ie. higher PC value, the more statistically significant the difference). And the FC describes how different the expression level is between a gene in one cluster compared to the others
+
+***Tip**: you need to have loaded library(dplyr) to run the below but you have already imported this package at the start of the tutorial* 
+
+The `%>%` is a magical operator in R which allows use to put lots of functions together. We are using it here to try and make the code a shorter and easier to follow.
+
+```{r warning=FALSE}
+top_2_markers <- seurat_markers %>%
+  group_by(cluster) %>%
+  slice_max(n = 2, order_by = avg_log2FC)
+top_2_markers
+```
+
+Below is an example if we wanted to find the differentially expressed genes between two cluster of interest. In this example we are looking at our cluster 0 and cluster 2. As you can see from the UMAP above, they are next to each other, which could suggest that they have similar transcriptomic profiles. Using `FindMarkers` we can investigate further into why they were put into different clusters.
+
+```{r}
+cluster_0_vs_cluster_2 <- FindMarkers(seurat_object, ident.1 = 0, ident.2 = 2, min.pct = 0.25)
+head(cluster_0_vs_cluster_2, n=5)
+```
+
+If we wanted to compare between 2 clusters, we would need to specify the `idents`. e.g. `ident.1 = 3, ident.2 = 7`. If you were doing the same against the 
+
+
+## Step 11: Assigning cell type
+
+We can then start exploring the expression of these markers using:
+- `DoHeatmap()`
+- `VlnPlot()`
+- `FeaturePlot()`
+- `DotPlot()`
+
+**To do**: A great way to initially visualize the top markers for all clusters is through a heatmap. This might not look perfectly polished but its a good starting point to compare all the top markers across your clusters.
+
+```{r}
+top_10_markers <- seurat_markers %>%
+  group_by(cluster) %>%
+  slice_max(n = 10, order_by = avg_log2FC)
+DoHeatmap(seurat_object, features = top_10_markers$gene) + NoLegend()
+```
+
+As in this case we know we are working with PBMC cells, so we know what cell-types to expect in the sample. We can do some litature research and find known marker genes for cells we might expect to see in our sample. The following code chunk adds both these markers from the literature (`know_marker_genes`) and the top 2 marker genes which we have extracted from our data (`extracted_marker_genes`).
+
+```{r}
+know_marker_genes <- c("MS4A1", "GNLY", "CD3E", "CD14", "FCER1A", "FCGR3A", "LYZ", "PPBP", "CD8A")
+extracted_marker_genes <- top_2_markers$gene
+```
+
+A feature plot shows the expression level of each gene within a cell and overlaps this onto the UMAP. The default implemntation of `FeaturePlot()` can be seen for our `know_marker_genes`.
+```{r}
+FeaturePlot(seurat_object, features=know_marker_genes)
+```
+
+However, in some cases this plot can be misleading. By changing the parameters, `order` to bring any cell with the value to front, and `label` to make it easier to see which cluster a cell is in. You can see that from a little bit of trail and error you can extract some more information from your plots. This is particularly the case for the CD8A+ cells.
+```{r}
+FeaturePlot(seurat_object, features=know_marker_genes, order = TRUE, label = TRUE) & NoLegend()
+```
+
+We can also look at the expression probability distributions across the clusters using the `VlnPlot()` function. Here we have a look at some of top genes we extracted using `FindAllMarkers()`
+```{r}
+VlnPlot(seurat_object, features = extracted_marker_genes[1:6])
+```
+
+```{r}
+VlnPlot(seurat_object, features = extracted_marker_genes[7:12])
+```
+
+You can also look up your "favourite genes" by adding it. You can add multiple query genes by combing them in a vector `c("gene1", "gene2", ...)`. 
+
+Using the code block below. Search for some genes of interest! If none come to mind, scroll-up to where you did you PCA analysis. And use some the top gene from here.
+
+```{r}
+# VlnPlot(seurat_object, features = c("CD8A", "CD8B")
+VlnPlot(seurat_object, features = "CD8B")
+```
+
+Finally you can use a `DotPlot()`. This plot is a good way to visualise how feature expression changes across different identity classes (clusters). The size of the dot encodes the percentage of cells within a class, while the color encodes the average expression level across all cells within a class (blue is high). In the example below we plot the expression of some well-known CD genes.
+
+```{r}
+DotPlot(seurat_object, features = c("CD247", "CD3E", "CD9"))
+```
+
+From everything we have done above and markers found in the literature we can use the following markers to assign cell-types to the clusters. The table below outlines our decision:
+
+
+  Cluster ID |    Markers    |  Cell Type 
+-------------|---------------|--------------
+           0 | IL7R, CCR7    | Naive CD4+ T 
+           1 | CD14, LYZ     | CD14+ Mono   
+           2 | IL7R, S100A4  | Memory CD4+  
+           3 | MS4A1         | B            
+           4 | CD8A          | CD8+ T       
+           5 | FCGR3A, MS4A7 | FCGR3A+ Mono 
+           6 | GNLY, NKG7    | NK           
+           7 | FCER1A, CST3  | DC           
+           8 | PPBP          | Platelet   
+
+To assign new cell names to our clusters we create a list of new the new cell names in order of the of the cluster you want to rename. I.e. if you wanted to rename Cluster `0` then the first element in the list would be assigned to cluster `0` and so on.
+
+* **Tip**: Once you assign a cell name to a cluster name, you don’t lose the `seurat_clusters` assignment as it is saved to the `seurat_object@meta.data$seurat_clusters`. To revert back to the `seurat_clusters` numbers use the following command `Idents(seurat_object) <- seurat_object@meta.data$seurat_clusters`.
+
+
+```{r}
+new_cluster_ids <- c("Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T", "FCGR3A+ Mono", "NK", "DC", "Platelet")
+names(new_cluster_ids) <- levels(seurat_object)
+seurat_object <- RenameIdents(seurat_object, new_cluster_ids)
+DimPlot(seurat_object, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+```
+
+We can then look into how many cells we have in each cluster and you can also calculate this as a proportion.
+```{r}
+# How many cells are in each cluster
+table(Idents(seurat_object))
+```
+
+```{r}
+# What proportion of cells are in each cluster?
+prop.table(table(Idents(seurat_object)))
+```
+
+
+Lets Inspect our Seurat Object for a final time. First we can look at the main object:
+```{r}
+seurat_object
+```
+
+Then we can see the meta data that has been added to the object. This includes to the QC results and the clustering.
+```{r}
+head(seurat_object@meta.data)
+```
+
+Finally, we can save the output. This will save everything analysis (not the plots however) to an object that you can share with others or reload yourself the next time you would like inspect this data.
+
+```{r, eval=FALSE}
+saveRDS(seurat_object, file = 'ei_10X_genomics_analysis.rds')
+```
+
