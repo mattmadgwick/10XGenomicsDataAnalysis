@@ -8,7 +8,8 @@ In this session we will cover:
 3. Address some of the assumptions/difficulties you may run into when analysing single-cell data
 
 ## Included in this Repo
-* This repo holds the main course script: `ei_10X_genomics_analysis_pratical.Rmd`
+* main course script: `ei_10X_genomics_analysis_pratical.Rmd`
+* static web-version of the script: `ei_10X_genomics_analysis_pratical.html`
 * `data` folder with the data for the course
   * `10X/filtered_gene_bc_matrices`: PBMC example data
   * `ss2`: PBMC smart-seq2 example data (not used during the session)
