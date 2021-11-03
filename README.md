@@ -1,4 +1,4 @@
-# 10XGenomicsDataAnalysis
+# 10X Genomics Data Analysis (Seurat)
 Course materials for Day 3 10X Genomics data analysis (Seurat) of the Single-Cell RNAseq Training Course 2021.
 
 ## Session Overview
