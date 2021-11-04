@@ -15,6 +15,7 @@ In this session we will cover:
   * `ss2`: PBMC smart-seq2 example data (not used during the session)
 * `slides`: slides used alongside the hands on session
 * `cellranger`: additional resources and information for using cellranger
+* `software_requirements`: a tutorial to install software and packages for this course
 
 ## How to download the repo
 1. To go this GitHub Repo: https://github.com/mattmadgwick/10XGenomicsDataAnalysis
@@ -28,7 +29,7 @@ To open workbook:
 2. On the top right hand corner click on the projects drop-down.
 3. Click `Open Project`
 4. Navigate the where you downloaded the course materials
-5. Click on the folder 10XGenomicsDataAnalysis-main
+5. Click on the folder `10XGenomicsDataAnalysis-main`
 6. Then click `Open`.
 
 
