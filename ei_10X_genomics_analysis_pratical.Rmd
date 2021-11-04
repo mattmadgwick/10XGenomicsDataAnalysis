@@ -419,7 +419,7 @@ cluster_0_vs_cluster_2 <- FindMarkers(seurat_object, ident.1 = 0, ident.2 = 2, m
 head(cluster_0_vs_cluster_2, n=5)
 ```
 
-If we wanted to compare between 2 clusters, we would need to specify the `idents`. e.g. `ident.1 = 3, ident.2 = 7`. If you were doing the same against the 
+If we wanted to compare between 2 clusters, we would need to specify the `idents`. e.g. `ident.1 = 3, ident.2 = 7`. You can also compare one ident vs many by combining serval different idents/metadata field into a list e.g. `ident.1 = 3, ident.2 = c(7, 8)`.
 
 
 ## Step 11: Assigning cell type
@@ -474,7 +474,7 @@ Using the code block below. Search for some genes of interest! If none come to m
 VlnPlot(seurat_object, features = "CD8B")
 ```
 
-Finally you can use a `DotPlot()`. This plot is a good way to visualise how feature expression changes across different identity classes (clusters). The size of the dot encodes the percentage of cells within a class, while the color encodes the average expression level across all cells within a class (blue is high). In the example below we plot the expression of some well-known CD genes.
+Finally, you can use a `DotPlot()`. This plot is a good way to visualise how feature expression changes across different identity classes (clusters). The size of the dot encodes the percentage of cells within a class, while the color encodes the average expression level across all cells within a class (blue is high). In the example below we plot the expression of some well-known CD genes.
 
 ```{r}
 DotPlot(seurat_object, features = c("CD247", "CD3E", "CD9"))
